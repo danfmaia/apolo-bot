@@ -43,6 +43,8 @@ def main():
         'presence_penalty': float(os.environ.get('PRESENCE_PENALTY', 0.0)),
         'frequency_penalty': float(os.environ.get('FREQUENCY_PENALTY', 0.0)),
         'bot_language': os.environ.get('BOT_LANGUAGE', 'en'),
+        # added for apolo-bot
+        'token_price': float(os.environ.get('TOKEN_PRICE', 0.002)),
     }
 
     # log deprecation warning for old budget variable names

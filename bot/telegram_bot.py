@@ -37,14 +37,16 @@ class ChatGPTTelegramBot:
         bot_language = self.config['bot_language']
         self.commands = [
             BotCommand(command='help', description=localized_text('help_description', bot_language)),
-            BotCommand(command='reset', description=localized_text('reset_description', bot_language)),
+            # BotCommand(command='reset', description=localized_text('reset_description', bot_language)),
             BotCommand(command='image', description=localized_text('image_description', bot_language)),
             BotCommand(command='stats', description=localized_text('stats_description', bot_language)),
-            BotCommand(command='resend', description=localized_text('resend_description', bot_language))
+            BotCommand(command='resend', description=localized_text('resend_description', bot_language)),
+            BotCommand(command='prices', description=localized_text('prices_description', bot_language))
         ]
-        self.group_commands = [BotCommand(
-            command='chat', description=localized_text('chat_description', bot_language)
-        )] + self.commands
+        # self.group_commands = [BotCommand(
+        #     command='chat', description=localized_text('chat_description', bot_language)
+        # )] + self.commands
+        self.group_commands = self.commands
         self.disallowed_message = localized_text('disallowed', bot_language)
         self.budget_limit_message = localized_text('budget_limit', bot_language)
         self.usage = {}
@@ -61,13 +63,13 @@ class ChatGPTTelegramBot:
         help_text = (
                 localized_text('help_text', bot_language)[0] +
                 '\n\n' +
-                '\n'.join(commands_description) +
-                '\n\n' +
                 localized_text('help_text', bot_language)[1] +
+                '\n\n' +
+                '\n'.join(commands_description) +
                 '\n\n' +
                 localized_text('help_text', bot_language)[2]
         )
-        await update.message.reply_text(help_text, disable_web_page_preview=True)
+        await update.message.reply_text(help_text, disable_web_page_preview=True, parse_mode=constants.ParseMode.MARKDOWN)
 
     async def stats(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -106,8 +108,8 @@ class ChatGPTTelegramBot:
             f"*{localized_text('usage_today', bot_language)}:*\n"
             f"{tokens_today} {localized_text('stats_tokens', bot_language)}\n"
             f"{images_today} {localized_text('stats_images', bot_language)}\n"
-            f"{transcribe_minutes_today} {localized_text('stats_transcribe', bot_language)[0]} "
-            f"{transcribe_seconds_today} {localized_text('stats_transcribe', bot_language)[1]}\n"
+            # f"{transcribe_minutes_today} {localized_text('stats_transcribe', bot_language)[0]} "
+            # f"{transcribe_seconds_today} {localized_text('stats_transcribe', bot_language)[1]}\n"
             f"{localized_text('stats_total', bot_language)}{current_cost['cost_today']:.2f}\n"
             f"----------------------------\n"
         )
@@ -115,8 +117,8 @@ class ChatGPTTelegramBot:
             f"*{localized_text('usage_month', bot_language)}:*\n"
             f"{tokens_month} {localized_text('stats_tokens', bot_language)}\n"
             f"{images_month} {localized_text('stats_images', bot_language)}\n"
-            f"{transcribe_minutes_month} {localized_text('stats_transcribe', bot_language)[0]} "
-            f"{transcribe_seconds_month} {localized_text('stats_transcribe', bot_language)[1]}\n"
+            # f"{transcribe_minutes_month} {localized_text('stats_transcribe', bot_language)[0]} "
+            # f"{transcribe_seconds_month} {localized_text('stats_transcribe', bot_language)[1]}\n"
             f"{localized_text('stats_total', bot_language)}{current_cost['cost_month']:.2f}"
         )
         # text_budget filled with conditional content
@@ -134,6 +136,8 @@ class ChatGPTTelegramBot:
                 f"{localized_text('stats_openai', bot_language)}"
                 f"{self.openai.get_billing_current_month():.2f}"
             )
+        else:
+            f"Saldo restante: ${remaining_budget:.2f}"
 
         usage_text = text_current_conversation + text_today + text_month + text_budget
         await update.message.reply_text(usage_text, parse_mode=constants.ParseMode.MARKDOWN)
@@ -166,26 +170,26 @@ class ChatGPTTelegramBot:
 
         await self.prompt(update=update, context=context)
 
-    async def reset(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """
-        Resets the conversation.
-        """
-        if not await is_allowed(self.config, update, context):
-            logging.warning(f'User {update.message.from_user.name} (id: {update.message.from_user.id}) '
-                            f'is not allowed to reset the conversation')
-            await self.send_disallowed_message(update, context)
-            return
+    # async def reset(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+    #     """
+    #     Resets the conversation.
+    #     """
+    #     if not await is_allowed(self.config, update, context):
+    #         logging.warning(f'User {update.message.from_user.name} (id: {update.message.from_user.id}) '
+    #                         f'is not allowed to reset the conversation')
+    #         await self.send_disallowed_message(update, context)
+    #         return
 
-        logging.info(f'Resetting the conversation for user {update.message.from_user.name} '
-                     f'(id: {update.message.from_user.id})...')
+    #     logging.info(f'Resetting the conversation for user {update.message.from_user.name} '
+    #                  f'(id: {update.message.from_user.id})...')
 
-        chat_id = update.effective_chat.id
-        reset_content = message_text(update.message)
-        self.openai.reset_chat_history(chat_id=chat_id, content=reset_content)
-        await update.effective_message.reply_text(
-            message_thread_id=get_thread_id(update),
-            text=localized_text('reset_done', self.config['bot_language'])
-        )
+    #     chat_id = update.effective_chat.id
+    #     reset_content = message_text(update.message)
+    #     self.openai.reset_chat_history(chat_id=chat_id, content=reset_content)
+    #     await update.effective_message.reply_text(
+    #         message_thread_id=get_thread_id(update),
+    #         text=localized_text('reset_done', self.config['bot_language'])
+    #     )
 
     async def image(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -230,6 +234,31 @@ class ChatGPTTelegramBot:
                 )
 
         await wrap_with_indicator(update, context, _generate, constants.ChatAction.UPLOAD_PHOTO)
+
+    async def prices(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        Returns the price table, for chat and image tokens.
+        """
+        if not await is_allowed(self.config, update, context):
+            logging.warning(f'User {update.message.from_user.name} (id: {update.message.from_user.id}) '
+                            f'is not allowed to request the price table')
+            await self.send_disallowed_message(update, context)
+            return
+
+        logging.info(f'User {update.message.from_user.name} (id: {update.message.from_user.id}) '
+                     f'requested the price table')
+        
+        bot_language = self.config['bot_language']
+
+        text_price_table = (
+            f"*{localized_text('prices', bot_language)[0]}*:\n\n"
+            f"{localized_text('prices', bot_language)[1]} – ${self.config['token_price']:.3f} a cada 1000 tokens\n\n"
+            f"{localized_text('prices', bot_language)[2]} – ${self.config['image_prices'][2]:.2f} por imagem\n\n"
+        )
+        text_currency_explain = localized_text('prices_currency_explain', bot_language)
+
+        text_prices = text_price_table + text_currency_explain
+        await update.message.reply_text(text_prices, parse_mode=constants.ParseMode.MARKDOWN)
 
     async def transcribe(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -740,13 +769,16 @@ class ChatGPTTelegramBot:
             .post_init(self.post_init) \
             .concurrent_updates(True) \
             .build()
+        
 
-        application.add_handler(CommandHandler('reset', self.reset))
+        
         application.add_handler(CommandHandler('help', self.help))
         application.add_handler(CommandHandler('image', self.image))
         application.add_handler(CommandHandler('start', self.help))
         application.add_handler(CommandHandler('stats', self.stats))
         application.add_handler(CommandHandler('resend', self.resend))
+        # application.add_handler(CommandHandler('reset', self.reset))
+        application.add_handler(CommandHandler('prices', self.prices))
         application.add_handler(CommandHandler(
             'chat', self.prompt, filters=filters.ChatType.GROUP | filters.ChatType.SUPERGROUP)
         )
