@@ -3,6 +3,18 @@ import pathlib
 import json
 from datetime import date
 
+import firebase_admin
+from firebase_admin import credentials
+from firebase_admin import db
+
+cred = credentials.Certificate('ia-e-cia-bot-firebase-adminsdk-dt7tu-58949ed6df.json')
+firebase_admin.initialize_app(cred, {
+    'databaseURL': 'https://ia-e-cia-bot-default-rtdb.firebaseio.com/'
+})
+
+# Get a reference to the usage_logs folder in the database
+db_ref = db.reference("usage_logs")
+
 
 def year_month(date_str):
     # extract string of year-month from date, eg: '2023-03'
@@ -10,61 +22,31 @@ def year_month(date_str):
 
 
 class UsageTracker:
-    """
-    UsageTracker class
-    Enables tracking of daily/monthly usage per user.
-    User files are stored as JSON in /usage_logs directory.
-    JSON example:
-    {
-        "user_name": "@user_name",
-        "current_cost": {
-            "day": 0.45,
-            "month": 3.23,
-            "all_time": 3.23,
-            "last_update": "2023-03-14"},
-        "usage_history": {
-            "chat_tokens": {
-                "2023-03-13": 520,
-                "2023-03-14": 1532
-            },
-            "transcription_seconds": {
-                "2023-03-13": 125,
-                "2023-03-14": 64
-            },
-            "number_images": {
-                "2023-03-12": [0, 2, 3],
-                "2023-03-13": [1, 2, 3],
-                "2023-03-14": [0, 1, 2]
-            }
-        }
-    }
-    """
-
     def __init__(self, user_id, user_name, logs_dir="usage_logs"):
         """
         Initializes UsageTracker for a user with current date.
         Loads usage data from usage log file.
         :param user_id: Telegram ID of the user
         :param user_name: Telegram user name
-        :param logs_dir: path to directory of usage logs, defaults to "usage_logs"
         """
         self.user_id = user_id
+
         self.logs_dir = logs_dir
         # path to usage file of given user
         self.user_file = f"{logs_dir}/{user_id}.json"
 
-        if os.path.isfile(self.user_file):
-            with open(self.user_file, "r") as file:
-                self.usage = json.load(file)
+        usage_data = db_ref.get()
+
+        if usage_data is not None:
+            self.usage = usage_data
         else:
-            # ensure directory exists
-            pathlib.Path(logs_dir).mkdir(exist_ok=True)
             # create new dictionary for this user
             self.usage = {
                 "user_name": user_name,
                 "current_cost": {"day": 0.0, "month": 0.0, "all_time": 0.0, "last_update": str(date.today())},
                 "usage_history": {"chat_tokens": {}, "transcription_seconds": {}, "number_images": {}}
             }
+            db_ref.set(self.usage)
 
     # token usage functions:
 
@@ -88,6 +70,7 @@ class UsageTracker:
         # write updated token usage to user file
         with open(self.user_file, "w") as outfile:
             json.dump(self.usage, outfile)
+            db_ref.update(self.usage)
 
     def get_current_token_usage(self):
         """Get token amounts used for today and this month
@@ -133,6 +116,7 @@ class UsageTracker:
         # write updated image number to user file
         with open(self.user_file, "w") as outfile:
             json.dump(self.usage, outfile)
+            db_ref.update(self.usage)
 
     def get_current_image_count(self):
         """Get number of images requested for today and this month.
@@ -173,6 +157,7 @@ class UsageTracker:
         # write updated token usage to user file
         with open(self.user_file, "w") as outfile:
             json.dump(self.usage, outfile)
+            db_ref.update(self.usage)
 
     def add_current_costs(self, request_cost):
         """
