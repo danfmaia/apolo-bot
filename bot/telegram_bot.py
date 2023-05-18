@@ -40,6 +40,7 @@ class ChatGPTTelegramBot:
             # BotCommand(command='reset', description=localized_text('reset_description', bot_language)),
             BotCommand(command='image', description=localized_text('image_description', bot_language)),
             BotCommand(command='stats', description=localized_text('stats_description', bot_language)),
+            BotCommand(command='costs', description=localized_text('costs_description', bot_language)),
             BotCommand(command='resend', description=localized_text('resend_description', bot_language)),
             BotCommand(command='prices', description=localized_text('prices_description', bot_language))
         ]
@@ -141,6 +142,55 @@ class ChatGPTTelegramBot:
 
         usage_text = text_current_conversation + text_today + text_month + text_budget
         await update.message.reply_text(usage_text, parse_mode=constants.ParseMode.MARKDOWN)
+
+    async def costs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """
+        If admin, returns the costs info from all users.
+        Otherwise, returns own costs info.
+        """
+        if not await is_allowed(self.config, update, context):
+            logging.warning(f'User {update.message.from_user.name} (id: {update.message.from_user.id}) '
+                            f'is not allowed to request all-time costs')
+            await self.send_disallowed_message(update, context)
+            return
+        
+        bot_language = self.config['bot_language']
+        
+        if is_admin(self.config, update.message.from_user.id):
+            logging.info(f'Admin User {update.message.from_user.name} (id: {update.message.from_user.id}) '
+                        f'requested costs info from all users')
+
+            costs_text = f"<b>{localized_text('costs_text_admin', bot_language)[0]}</b>\n\n"
+
+            all_time_costs = UsageTracker.get_all_time_costs()
+            total_costs = 0
+            for user_name, cost in all_time_costs.items():
+                costs_text += f"{user_name} – ${cost:.2f}\n"
+                total_costs = total_costs + cost
+
+            costs_text += f"\n{localized_text('costs_text_admin', bot_language)[1]}\n\n"
+
+            costs_text = costs_text + f"{localized_text('costs_text_admin', bot_language)[2]} <b>${total_costs:.2f}</b>"
+            await update.message.reply_text(costs_text, parse_mode=constants.ParseMode.HTML)
+
+        else:
+            logging.info(f'User {update.message.from_user.name} (id: {update.message.from_user.id}) '
+                        f'requested own costs info')
+            
+            user_id = update.message.from_user.id
+            if user_id not in self.usage:
+                self.usage[user_id] = UsageTracker(user_id, update.message.from_user.name)
+
+            user_all_time_cost = self.usage[user_id].get_current_cost()["cost_all_time"]
+            cost_text = f"{localized_text('costs_text_regular', bot_language)[0]} *${user_all_time_cost:.2f}*\n\n"
+            
+            if user_all_time_cost < 1.00:
+                cost_text += f"{localized_text('costs_text_regular', bot_language)[1]}\n\n"
+
+            remaining_budget = get_remaining_budget(self.config, self.usage, update)
+            cost_text += f"{localized_text('costs_text_regular', bot_language)[2]} *${remaining_budget:.2f}*"
+
+            await update.message.reply_text(cost_text, parse_mode=constants.ParseMode.MARKDOWN)
 
     async def resend(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
@@ -751,6 +801,20 @@ class ChatGPTTelegramBot:
             result_id = str(uuid4())
             await self.send_inline_query_result(update, result_id, message_content=self.budget_limit_message)
 
+    # async def send_no_permisson_message(self, update: Update, _: ContextTypes.DEFAULT_TYPE, is_inline=False):
+    #     """
+    #     Sends the "no permission" message to the user.
+    #     """
+    #     if not is_inline:
+    #         await update.effective_message.reply_text(
+    #             message_thread_id=get_thread_id(update),
+    #             text=self.no_permission_message,
+    #             disable_web_page_preview=True
+    #         )
+    #     else:
+    #         result_id = str(uuid4())
+    #         await self.send_inline_query_result(update, result_id, message_content=self.no_permission_message)
+
     async def post_init(self, application: Application) -> None:
         """
         Post initialization hook for the bot.
@@ -776,6 +840,7 @@ class ChatGPTTelegramBot:
         application.add_handler(CommandHandler('image', self.image))
         application.add_handler(CommandHandler('start', self.help))
         application.add_handler(CommandHandler('stats', self.stats))
+        application.add_handler(CommandHandler('costs', self.costs))
         application.add_handler(CommandHandler('resend', self.resend))
         # application.add_handler(CommandHandler('reset', self.reset))
         application.add_handler(CommandHandler('prices', self.prices))
