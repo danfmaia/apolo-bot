@@ -2,7 +2,7 @@ import os.path
 import pathlib
 import json
 from datetime import date
-
+import html
 
 def year_month(date_str):
     # extract string of year-month from date, eg: '2023-03'
@@ -65,6 +65,27 @@ class UsageTracker:
                 "current_cost": {"day": 0.0, "month": 0.0, "all_time": 0.0, "last_update": str(date.today())},
                 "usage_history": {"chat_tokens": {}, "transcription_seconds": {}, "number_images": {}}
             }
+    
+    @staticmethod
+    def get_all_time_costs(logs_dir="usage_logs"):
+        """
+        Returns a dictionary of all_time costs indexed by user_name, sorted in descending order.
+        :param logs_dir: Path to the directory containing the user JSON logs
+        :return: Dictionary of all_time costs indexed by user_name, sorted in descending order
+        """
+        costs = {}
+
+        for filename in os.listdir(logs_dir):
+            if filename.endswith(".json"):
+                file_path = os.path.join(logs_dir, filename)
+                with open(file_path, "r") as file:
+                    data = json.load(file)
+                    user_name = html.escape(data["user_name"])
+                    all_time_cost = data["current_cost"]["all_time"]
+                    costs[user_name] = all_time_cost
+
+        sorted_costs = dict(sorted(costs.items(), key=lambda item: item[1], reverse=True))
+        return sorted_costs
 
     # token usage functions:
 
