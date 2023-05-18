@@ -99,10 +99,14 @@ class OpenAIHelper:
             answer = response.choices[0]['message']['content'].strip()
             self.__add_to_history(chat_id, role="assistant", content=answer)
 
-        bot_language = self.config['bot_language']
         if self.config['show_usage']:
+            bot_language = self.config['bot_language']
+            tokens_used_int = self.__count_tokens(self.conversations[chat_id])
+            currency_used = tokens_used_int * self.config['token_price'] / 1000
+            currency_used = "{:.5f}".format(currency_used)
+        
             answer += "\n\n---\n" \
-                      f"💰 {str(response.usage['total_tokens'])} {localized_text('stats_tokens_in_conversation', bot_language)}" \
+                      f"💰 {str(response.usage['total_tokens'])} {localized_text('stats_tokens_in_conversation', bot_language)} (${currency_used})" \
                       f" ({str(response.usage['prompt_tokens'])} {localized_text('prompt', bot_language)}," \
                       f" {str(response.usage['completion_tokens'])} {localized_text('completion', bot_language)})"
 
@@ -130,11 +134,11 @@ class OpenAIHelper:
         tokens_used_int = self.__count_tokens(self.conversations[chat_id])
         tokens_used = str(tokens_used_int)
 
-        currency_used = tokens_used_int * self.config['token_price'] / 1000
-        currency_used = "{:.5f}".format(currency_used)
-
         if self.config['show_usage']:
-            answer += f"\n\n---\n💰 {tokens_used} {localized_text('stats_tokens_in_conversation', self.config['bot_language'])} - ${currency_used}"
+            currency_used = tokens_used_int * self.config['token_price'] / 1000
+            currency_used = "{:.5f}".format(currency_used)
+
+            answer += f"\n\n---\n💰 {tokens_used} {localized_text('stats_tokens_in_conversation', self.config['bot_language'])} (${currency_used})"
 
         yield answer, tokens_used
 
