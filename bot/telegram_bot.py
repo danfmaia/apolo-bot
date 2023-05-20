@@ -450,21 +450,7 @@ class ChatGPTTelegramBot:
         is_to_respond = True
 
         if is_group_chat(update):
-            trigger_keyword = self.config['group_trigger_keyword']
-            if prompt.lower().startswith(trigger_keyword.lower()):
-                # prompt = prompt[len(trigger_keyword):].strip()
-
-                if update.message.reply_to_message and \
-                        update.message.reply_to_message.text and \
-                        update.message.reply_to_message.from_user.id != context.bot.id:
-                    prompt = f'"{update.message.reply_to_message.text}" {prompt}'
-            else:
-                if update.message.reply_to_message and \
-                        update.message.reply_to_message.from_user.id == context.bot.id:
-                    logging.info('Message is a reply to the bot, allowing...')
-                else:
-                    is_to_respond = False
-                    logging.warning('Message does not start with trigger keyword, just considering but not responding...')
+            original_prompt = prompt
 
             # add prefixes to prompt
             role_str = "Não é admin"
@@ -475,9 +461,34 @@ class ChatGPTTelegramBot:
                 is_to_respond_str = "Responda"
             prefixes = f"[{str(update.message.from_user.name)} - {role_str} - {is_to_respond_str}]\n\n"
             prompt = prefixes + prompt
+
+            trigger_keyword = self.config['group_trigger_keyword']
+            reply_to_message = update.message.reply_to_message
+
+            if (reply_to_message and reply_to_message.text):
+                reply_text = f'Mensagem respondida: "{reply_to_message.text}"\n\n'
+                prompt = reply_text + prompt
+
+            if original_prompt.lower().startswith(trigger_keyword.lower()) == False:
+                # prompt = prompt[len(trigger_keyword):].strip()
+                # if reply_to_message and \
+                #         reply_to_message.text and \
+                #         reply_to_message.from_user.id != context.bot.id:
+                #     prompt = f'"{update.message.reply_to_message.text}" {prompt}'
+            # else:
+                if reply_to_message and \
+                        reply_to_message.from_user.id == context.bot.id:
+                    logging.info('Message is a reply to the bot, allowing...')
+                else:
+                    logging.warning('Message does not start with trigger keyword, just considering but not responding...')
+                    is_to_respond = False
+
+            # add suffix to prompt
             if is_to_respond == False:
                 suffix = f"\n\n[Atenção! Você não deve responder a essa mensagem. Considere-a, mas escreva apenas “…”.]"
                 prompt = prompt + suffix
+
+            # print(prompt)
 
         try:
             total_tokens = 0
