@@ -447,31 +447,48 @@ class ChatGPTTelegramBot:
         prompt = message_text(update.message)
         self.last_message[chat_id] = prompt
 
+        is_to_respond = True
+
         if is_group_chat(update):
             trigger_keyword = self.config['group_trigger_keyword']
             if prompt.lower().startswith(trigger_keyword.lower()):
-                prompt = prompt[len(trigger_keyword):].strip()
+                # prompt = prompt[len(trigger_keyword):].strip()
 
                 if update.message.reply_to_message and \
                         update.message.reply_to_message.text and \
                         update.message.reply_to_message.from_user.id != context.bot.id:
                     prompt = f'"{update.message.reply_to_message.text}" {prompt}'
             else:
-                if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id:
+                if update.message.reply_to_message and \
+                        update.message.reply_to_message.from_user.id == context.bot.id:
                     logging.info('Message is a reply to the bot, allowing...')
                 else:
-                    logging.warning('Message does not start with trigger keyword, ignoring...')
-                    return
+                    is_to_respond = False
+                    logging.warning('Message does not start with trigger keyword, just considering but not responding...')
+
+            # add prefixes to prompt
+            role_str = "Não é admin"
+            if is_admin(self.config, user_id):
+                role_str = "É admin"
+            is_to_respond_str = "Não responda"
+            if is_to_respond:
+                is_to_respond_str = "Responda"
+            prefixes = f"[{str(update.message.from_user.name)} - {role_str} - {is_to_respond_str}]\n\n"
+            prompt = prefixes + prompt
+            if is_to_respond == False:
+                suffix = f"\n\n[Atenção! Você não deve responder a essa mensagem. Considere-a, mas escreva apenas “…”.]"
+                prompt = prompt + suffix
 
         try:
             total_tokens = 0
 
             if self.config['stream']:
-                await update.effective_message.reply_chat_action(
-                    action=constants.ChatAction.TYPING,
-                    message_thread_id=get_thread_id(update)
-                )
-
+                if is_to_respond:
+                    await update.effective_message.reply_chat_action(
+                        action=constants.ChatAction.TYPING,
+                        message_thread_id=get_thread_id(update)
+                    )
+                
                 stream_response = self.openai.get_chat_response_stream(chat_id=chat_id, query=prompt)
                 i = 0
                 prev = ''
@@ -494,10 +511,11 @@ class ChatGPTTelegramBot:
                             except:
                                 pass
                             try:
-                                sent_message = await update.effective_message.reply_text(
-                                    message_thread_id=get_thread_id(update),
-                                    text=content if len(content) > 0 else "..."
-                                )
+                                if is_to_respond:
+                                    sent_message = await update.effective_message.reply_text(
+                                        message_thread_id=get_thread_id(update),
+                                        text=content if len(content) > 0 else "..."
+                                    )
                             except:
                                 pass
                             continue
@@ -510,11 +528,12 @@ class ChatGPTTelegramBot:
                             if sent_message is not None:
                                 await context.bot.delete_message(chat_id=sent_message.chat_id,
                                                                  message_id=sent_message.message_id)
-                            sent_message = await update.effective_message.reply_text(
-                                message_thread_id=get_thread_id(update),
-                                reply_to_message_id=get_reply_to_message_id(self.config, update),
-                                text=content
-                            )
+                            if is_to_respond:
+                                sent_message = await update.effective_message.reply_text(
+                                    message_thread_id=get_thread_id(update),
+                                    reply_to_message_id=get_reply_to_message_id(self.config, update),
+                                    text=content
+                                )
                         except:
                             continue
 
@@ -556,21 +575,23 @@ class ChatGPTTelegramBot:
 
                     for index, chunk in enumerate(chunks):
                         try:
-                            await update.effective_message.reply_text(
-                                message_thread_id=get_thread_id(update),
-                                reply_to_message_id=get_reply_to_message_id(self.config,
-                                                                            update) if index == 0 else None,
-                                text=chunk,
-                                parse_mode=constants.ParseMode.MARKDOWN
-                            )
-                        except Exception:
-                            try:
+                            if is_to_respond:
                                 await update.effective_message.reply_text(
                                     message_thread_id=get_thread_id(update),
                                     reply_to_message_id=get_reply_to_message_id(self.config,
                                                                                 update) if index == 0 else None,
-                                    text=chunk
+                                    text=chunk,
+                                    parse_mode=constants.ParseMode.MARKDOWN
                                 )
+                        except Exception:
+                            try:
+                                if is_to_respond:
+                                    await update.effective_message.reply_text(
+                                        message_thread_id=get_thread_id(update),
+                                        reply_to_message_id=get_reply_to_message_id(self.config,
+                                                                                    update) if index == 0 else None,
+                                        text=chunk
+                                    )
                             except Exception as exception:
                                 raise exception
 
