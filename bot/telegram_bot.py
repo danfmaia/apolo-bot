@@ -465,20 +465,15 @@ class ChatGPTTelegramBot:
             trigger_keyword = self.config['group_trigger_keyword']
             reply_to_message = update.message.reply_to_message
 
-            if (reply_to_message and reply_to_message.text):
+            if reply_to_message and reply_to_message.text:
                 reply_text = f'Mensagem respondida: "{reply_to_message.text}"\n\n'
                 prompt = reply_text + prompt
 
-            if original_prompt.lower().startswith(trigger_keyword.lower()) == False:
-                # prompt = prompt[len(trigger_keyword):].strip()
-                # if reply_to_message and \
-                #         reply_to_message.text and \
-                #         reply_to_message.from_user.id != context.bot.id:
-                #     prompt = f'"{update.message.reply_to_message.text}" {prompt}'
-            # else:
-                if reply_to_message and \
-                        reply_to_message.from_user.id == context.bot.id:
-                    logging.info('Message is a reply to the bot, allowing...')
+            if reply_to_message and reply_to_message.from_user.id == context.bot.id:
+                logging.info('Message is a reply to the bot, allowing...')
+            else:
+                if original_prompt.lower().startswith(trigger_keyword.lower()):
+                    logging.info('Message starts with trigger keyword, allowing...')
                 else:
                     logging.warning('Message does not start with trigger keyword, just considering but not responding...')
                     is_to_respond = False
@@ -801,7 +796,14 @@ class ChatGPTTelegramBot:
             return False
         if not is_within_budget(self.config, self.usage, update, is_inline=is_inline):
             logging.warning(f'User {name} (id: {user_id}) reached their usage limit')
-            await self.send_budget_reached_message(update, context, is_inline)
+            reply_to_message = update.message.reply_to_message
+            if reply_to_message and reply_to_message.from_user.id == context.bot.id:
+                await self.send_budget_reached_message(update, context, is_inline)
+            else:
+                prompt = message_text(update.message)
+                trigger_keyword = self.config['group_trigger_keyword']
+                if prompt.lower().startswith(trigger_keyword.lower()):
+                    await self.send_budget_reached_message(update, context, is_inline)
             return False
 
         return True
