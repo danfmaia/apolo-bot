@@ -796,7 +796,14 @@ class ChatGPTTelegramBot:
             return False
         if not is_within_budget(self.config, self.usage, update, is_inline=is_inline):
             logging.warning(f'User {name} (id: {user_id}) reached their usage limit')
-            await self.send_budget_reached_message(update, context, is_inline)
+            reply_to_message = update.message.reply_to_message
+            if reply_to_message and reply_to_message.from_user.id == context.bot.id:
+                await self.send_budget_reached_message(update, context, is_inline)
+            else:
+                prompt = message_text(update.message)
+                trigger_keyword = self.config['group_trigger_keyword']
+                if prompt.lower().startswith(trigger_keyword.lower()):
+                    await self.send_budget_reached_message(update, context, is_inline)
             return False
 
         return True
